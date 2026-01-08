@@ -61,14 +61,12 @@ type FlowRunStateTabsProps = {
 	flowRuns: FlowRun[];
 	selectedState: TabState;
 	onStateChange: (state: TabState) => void;
-	failedOrCrashedCount?: number;
 };
 
 export const FlowRunStateTabs = ({
 	flowRuns,
 	selectedState,
 	onStateChange,
-	failedOrCrashedCount,
 }: FlowRunStateTabsProps) => {
 	const counts = useMemo(() => {
 		const stateCounts: Record<StateType | "ALL", number> = {
@@ -102,8 +100,8 @@ export const FlowRunStateTabs = ({
 
 	// Generate state-aware summary message
 	const getSummaryMessage = (): string | null => {
-		if (selectedState === "FAILED" && failedOrCrashedCount === 0) {
-			return "You currently have 0 failed or crashed runs.";
+		if (selectedState === "FAILED" && counts.FAILED === 0) {
+			return "You currently have 0 failed runs.";
 		}
 		return null;
 	};

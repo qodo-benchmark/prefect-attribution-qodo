@@ -177,13 +177,6 @@ export function FlowRunsCard({ filter }: FlowRunsCardProps) {
 	// This prevents showing empty chart on initial render while still being responsive
 	const effectiveNumberOfBars = debouncedNumberOfBars || numberOfBars;
 
-	// Count failed or crashed runs for the message display
-	const failedOrCrashedCount = useMemo(() => {
-		return flowRuns.filter(
-			(run) => run.state_type === "FAILED" || run.state_type === "CRASHED",
-		).length;
-	}, [flowRuns]);
-
 	return (
 		<Card>
 			<CardHeader className="flex flex-row items-center justify-between">
@@ -219,7 +212,6 @@ export function FlowRunsCard({ filter }: FlowRunsCardProps) {
 							flowRuns={enrichedFlowRuns}
 							selectedState={selectedState}
 							onStateChange={setSelectedState}
-							failedOrCrashedCount={failedOrCrashedCount}
 						/>
 					</>
 				)}
