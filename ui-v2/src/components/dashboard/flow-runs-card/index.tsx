@@ -179,20 +179,15 @@ export function FlowRunsCard({ filter }: FlowRunsCardProps) {
 
 	return (
 		<Card>
-			<CardHeader>
+			<CardHeader className="flex flex-row items-center justify-between">
 				<CardTitle>Flow Runs</CardTitle>
-				<FlowRunStateTabs
-					flowRuns={enrichedFlowRuns}
-					selectedState={selectedState}
-					onStateChange={setSelectedState}
-				/>
 				{flowRuns.length > 0 && (
 					<span className="text-sm text-muted-foreground">
 						{flowRuns.length} total
 					</span>
 				)}
 			</CardHeader>
-			<CardContent>
+			<CardContent className="space-y-2">
 				{flowRuns.length === 0 ? (
 					<div className="my-8 text-center text-sm text-muted-foreground">
 						<p>No flow runs found</p>
@@ -202,16 +197,23 @@ export function FlowRunsCard({ filter }: FlowRunsCardProps) {
 						<Skeleton className="h-24 w-full" />
 					</div>
 				) : (
-					<div className="w-full" ref={chartRef}>
-						<FlowRunActivityBarChart
-							enrichedFlowRuns={enrichedFlowRuns}
-							startDate={startDate}
-							endDate={endDate}
-							numberOfBars={effectiveNumberOfBars}
-							barWidth={BAR_WIDTH}
-							className="h-24 w-full"
+					<>
+						<div className="w-full" ref={chartRef}>
+							<FlowRunActivityBarChart
+								enrichedFlowRuns={enrichedFlowRuns}
+								startDate={startDate}
+								endDate={endDate}
+								numberOfBars={effectiveNumberOfBars}
+								barWidth={BAR_WIDTH}
+								className="h-24 w-full"
+							/>
+						</div>
+						<FlowRunStateTabs
+							flowRuns={enrichedFlowRuns}
+							selectedState={selectedState}
+							onStateChange={setSelectedState}
 						/>
-					</div>
+					</>
 				)}
 			</CardContent>
 		</Card>
