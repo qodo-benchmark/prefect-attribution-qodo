@@ -1,66 +1,40 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import humanizeDuration from "humanize-duration";
-import { useMemo, useState } from "react";
-import {
-	buildPaginateFlowRunsQuery,
-	type FlowRunsFilter,
-} from "@/api/flow-runs";
+import type { FlowRun } from "@/api/flow-runs";
 import { stateTypeColors } from "@/components/flow-runs/flow-run-graph/consts";
 import { Icon } from "@/components/ui/icons";
 import {
 	Pagination,
 	PaginationContent,
 	PaginationItem,
-	PaginationNext,
-	PaginationPrevious,
+	PaginationNextButton,
+	PaginationPreviousButton,
 } from "@/components/ui/pagination";
 import { StateBadge } from "@/components/ui/state-badge";
 import { Typography } from "@/components/ui/typography";
 
 type FlowRunsAccordionContentProps = {
-	/** The flow ID to display runs for */
-	flowId: string;
-	/** Filter for flow runs */
-	filter?: FlowRunsFilter;
+	/** Paginated flow runs */
+	flowRuns: FlowRun[];
+	/** Current page */
+	page: number;
+	/** Total number of pages */
+	totalPages: number;
+	/** Update the current page */
+	onPageChange: (page: number) => void;
 };
-
-const ITEMS_PER_PAGE = 3;
 
 /**
  * Content component for each accordion section.
  * Displays a paginated list of flow runs for a specific flow.
  */
 export function FlowRunsAccordionContent({
-	flowId,
-	filter,
+	flowRuns,
+	page,
+	totalPages,
+	onPageChange,
 }: FlowRunsAccordionContentProps) {
-	const [page, setPage] = useState(1);
-
-	// Build filter for this specific flow with pagination
-	const paginatedFilter = useMemo(() => {
-		return {
-			...filter,
-			flows: {
-				...filter?.flows,
-				operator: "and_" as const,
-				id: { any_: [flowId] },
-			},
-			page,
-			limit: ITEMS_PER_PAGE,
-			sort: "START_TIME_DESC" as const,
-		};
-	}, [filter, flowId, page]);
-
-	// Fetch paginated flow runs
-	const { data } = useQuery(
-		buildPaginateFlowRunsQuery(paginatedFilter, 30_000),
-	);
-
-	const flowRuns = data?.results ?? [];
-	const totalPages = data?.pages ?? 1;
-
 	return (
 		<div className="space-y-3">
 			{flowRuns.map((flowRun) => (
@@ -68,7 +42,7 @@ export function FlowRunsAccordionContent({
 					key={flowRun.id}
 					className="flex flex-col gap-2 rounded-md border-l-4 bg-muted/30 p-3"
 					style={{
-						borderLeftColor: getStateColor(flowRun.state_type),
+						borderLeftColor: _getStateColor(flowRun.state_type),
 					}}
 				>
 					<div className="flex items-center justify-between">
@@ -96,7 +70,7 @@ export function FlowRunsAccordionContent({
 								</span>
 							</div>
 						)}
-						{flowRun.estimated_run_time !== undefined && (
+						{flowRun.estimated_run_time != null && (
 							<div className="flex items-center gap-1">
 								<Icon id="Clock" className="size-3" />
 								<span>
@@ -116,13 +90,9 @@ export function FlowRunsAccordionContent({
 				<Pagination className="justify-start">
 					<PaginationContent>
 						<PaginationItem>
-							<PaginationPrevious
-								onClick={() => setPage((p) => Math.max(1, p - 1))}
-								className={
-									page === 1
-										? "pointer-events-none opacity-50"
-										: "cursor-pointer"
-								}
+							<PaginationPreviousButton
+								onClick={() => onPageChange(Math.max(1, page - 1))}
+								disabled={page === 1}
 							/>
 						</PaginationItem>
 						<PaginationItem>
@@ -131,13 +101,9 @@ export function FlowRunsAccordionContent({
 							</Typography>
 						</PaginationItem>
 						<PaginationItem>
-							<PaginationNext
-								onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-								className={
-									page === totalPages
-										? "pointer-events-none opacity-50"
-										: "cursor-pointer"
-								}
+							<PaginationNextButton
+								onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+								disabled={page === totalPages}
 							/>
 						</PaginationItem>
 					</PaginationContent>
@@ -147,7 +113,7 @@ export function FlowRunsAccordionContent({
 	);
 }
 
-function getStateColor(stateType: string | null | undefined): string {
+function _getStateColor(stateType: string | null | undefined): string {
 	if (stateType && stateType in stateTypeColors) {
 		return stateTypeColors[stateType as keyof typeof stateTypeColors];
 	}

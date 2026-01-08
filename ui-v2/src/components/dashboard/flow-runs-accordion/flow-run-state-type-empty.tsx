@@ -13,6 +13,16 @@ type FlowRunStateTypeEmptyProps = {
 export function FlowRunStateTypeEmpty({
 	stateTypes,
 }: FlowRunStateTypeEmptyProps) {
+	if (stateTypes.length === 0) {
+		return (
+			<div className="flex flex-col items-center justify-center py-8 text-center">
+				<p className="text-sm text-muted-foreground">
+					You currently have 0 runs.
+				</p>
+			</div>
+		);
+	}
+
 	// Format state types for display
 	const formattedStates = stateTypes.map((state) => {
 		// Convert state type to lowercase for display

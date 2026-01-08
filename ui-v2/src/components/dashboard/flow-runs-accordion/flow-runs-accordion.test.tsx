@@ -9,9 +9,9 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { buildApiUrl, createWrapper, server } from "@tests/utils";
 import { HttpResponse, http } from "msw";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { describe, expect, it } from "vitest";
-import type { FlowRunsFilter } from "@/api/flow-runs";
+import type { FlowRun } from "@/api/flow-runs";
 import type { Flow } from "@/api/flows";
 import { createFakeFlow, createFakeFlowRun } from "@/mocks";
 import { FlowRunStateTypeEmpty } from "./flow-run-state-type-empty";
@@ -41,26 +41,41 @@ const FlowRunsAccordionRouter = (props: FlowRunsAccordionProps) => {
 
 const FlowRunsAccordionHeaderRouter = ({
 	flow,
-	filter,
+	count,
+	lastFlowRun,
 }: {
 	flow: Flow;
-	filter: FlowRunsFilter;
+	count: number;
+	lastFlowRun?: FlowRun;
 }) => {
 	const router = createRouterWithComponent(
-		<FlowRunsAccordionHeader flow={flow} filter={filter} />,
+		<FlowRunsAccordionHeader
+			flow={flow}
+			count={count}
+			lastFlowRun={lastFlowRun}
+		/>,
 	);
 	return <RouterProvider router={router} />;
 };
 
 const FlowRunsAccordionContentRouter = ({
-	flowId,
-	filter,
+	flowRuns,
+	page,
+	totalPages,
+	onPageChange,
 }: {
-	flowId: string;
-	filter?: FlowRunsFilter;
+	flowRuns: FlowRun[];
+	page: number;
+	totalPages: number;
+	onPageChange: (page: number) => void;
 }) => {
 	const router = createRouterWithComponent(
-		<FlowRunsAccordionContent flowId={flowId} filter={filter} />,
+		<FlowRunsAccordionContent
+			flowRuns={flowRuns}
+			page={page}
+			totalPages={totalPages}
+			onPageChange={onPageChange}
+		/>,
 	);
 	return <RouterProvider router={router} />;
 };
@@ -72,6 +87,12 @@ describe("FlowRunStateTypeEmpty", () => {
 		expect(
 			screen.getByText("You currently have 0 failed runs."),
 		).toBeInTheDocument();
+	});
+
+	it("renders empty state message when no state types are provided", () => {
+		render(<FlowRunStateTypeEmpty stateTypes={[]} />);
+
+		expect(screen.getByText("You currently have 0 runs.")).toBeInTheDocument();
 	});
 
 	it("renders empty state message for multiple state types", () => {
@@ -139,8 +160,14 @@ describe("FlowRunsAccordion", () => {
 			http.post(buildApiUrl("/flows/filter"), () => {
 				return HttpResponse.json([flow1, flow2]);
 			}),
-			http.post(buildApiUrl("/flow_runs/count"), () => {
-				return HttpResponse.json(1);
+			http.post(buildApiUrl("/flow_runs/paginate"), () => {
+				return HttpResponse.json({
+					results: [],
+					count: 1,
+					pages: 1,
+					page: 1,
+					limit: 3,
+				});
 			}),
 		);
 
@@ -161,25 +188,11 @@ describe("FlowRunsAccordion", () => {
 describe("FlowRunsAccordionHeader", () => {
 	it("renders flow name as a link", async () => {
 		const flow = createFakeFlow({ id: "flow-1", name: "My Test Flow" });
-		const flowRun = createFakeFlowRun({
-			id: "run-1",
-			flow_id: "flow-1",
-			start_time: new Date().toISOString(),
-		});
-
-		server.use(
-			http.post(buildApiUrl("/flow_runs/count"), () => {
-				return HttpResponse.json(5);
-			}),
-			http.post(buildApiUrl("/flow_runs/filter"), () => {
-				return HttpResponse.json([flowRun]);
-			}),
-		);
 
 		render(
 			<FlowRunsAccordionHeaderRouter
 				flow={flow}
-				filter={{ sort: "START_TIME_DESC", offset: 0 }}
+				count={5}
 			/>,
 			{
 				wrapper: createWrapper(),
@@ -196,19 +209,10 @@ describe("FlowRunsAccordionHeader", () => {
 	it("renders flow run count", async () => {
 		const flow = createFakeFlow({ id: "flow-1", name: "Test Flow" });
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/count"), () => {
-				return HttpResponse.json(42);
-			}),
-			http.post(buildApiUrl("/flow_runs/filter"), () => {
-				return HttpResponse.json([]);
-			}),
-		);
-
 		render(
 			<FlowRunsAccordionHeaderRouter
 				flow={flow}
-				filter={{ sort: "START_TIME_DESC", offset: 0 }}
+				count={42}
 			/>,
 			{
 				wrapper: createWrapper(),
@@ -230,19 +234,11 @@ describe("FlowRunsAccordionHeader", () => {
 			start_time: recentDate.toISOString(),
 		});
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/count"), () => {
-				return HttpResponse.json(1);
-			}),
-			http.post(buildApiUrl("/flow_runs/filter"), () => {
-				return HttpResponse.json([flowRun]);
-			}),
-		);
-
 		render(
 			<FlowRunsAccordionHeaderRouter
 				flow={flow}
-				filter={{ sort: "START_TIME_DESC", offset: 0 }}
+				count={1}
+				lastFlowRun={flowRun}
 			/>,
 			{
 				wrapper: createWrapper(),
@@ -267,21 +263,17 @@ describe("FlowRunsAccordionContent", () => {
 			estimated_run_time: 120,
 		});
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				return HttpResponse.json({
-					results: [flowRun],
-					count: 1,
-					pages: 1,
-					page: 1,
-					limit: 3,
-				});
-			}),
+		render(
+			<FlowRunsAccordionContentRouter
+				flowRuns={[flowRun]}
+				page={1}
+				totalPages={1}
+				onPageChange={() => {}}
+			/>,
+			{
+				wrapper: createWrapper(),
+			},
 		);
-
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
 
 		await waitFor(() => {
 			expect(screen.getByText("test-run-name")).toBeInTheDocument();
@@ -298,21 +290,17 @@ describe("FlowRunsAccordionContent", () => {
 			state_type: "RUNNING",
 		});
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				return HttpResponse.json({
-					results: [flowRun],
-					count: 1,
-					pages: 1,
-					page: 1,
-					limit: 3,
-				});
-			}),
+		render(
+			<FlowRunsAccordionContentRouter
+				flowRuns={[flowRun]}
+				page={1}
+				totalPages={1}
+				onPageChange={() => {}}
+			/>,
+			{
+				wrapper: createWrapper(),
+			},
 		);
-
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
 
 		await waitFor(() => {
 			const link = screen.getByText("clickable-run");
@@ -330,21 +318,17 @@ describe("FlowRunsAccordionContent", () => {
 			createFakeFlowRun({ id: "run-3", name: "Run 3", flow_id: "flow-1" }),
 		];
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				return HttpResponse.json({
-					results: flowRuns,
-					count: 10,
-					pages: 4,
-					page: 1,
-					limit: 3,
-				});
-			}),
+		render(
+			<FlowRunsAccordionContentRouter
+				flowRuns={flowRuns}
+				page={1}
+				totalPages={4}
+				onPageChange={() => {}}
+			/>,
+			{
+				wrapper: createWrapper(),
+			},
 		);
-
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
 
 		await waitFor(() => {
 			expect(screen.getByText("Page 1 of 4")).toBeInTheDocument();
@@ -358,21 +342,17 @@ describe("FlowRunsAccordionContent", () => {
 			flow_id: "flow-1",
 		});
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				return HttpResponse.json({
-					results: [flowRun],
-					count: 1,
-					pages: 1,
-					page: 1,
-					limit: 3,
-				});
-			}),
+		render(
+			<FlowRunsAccordionContentRouter
+				flowRuns={[flowRun]}
+				page={1}
+				totalPages={1}
+				onPageChange={() => {}}
+			/>,
+			{
+				wrapper: createWrapper(),
+			},
 		);
-
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
 
 		await waitFor(() => {
 			expect(screen.getByText("Single Run")).toBeInTheDocument();
@@ -390,30 +370,26 @@ describe("FlowRunsAccordionContent", () => {
 			createFakeFlowRun({ id: "run-4", name: "Page 2 Run", flow_id: "flow-1" }),
 		];
 
-		let currentPage = 1;
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				const runs = currentPage === 1 ? page1Runs : page2Runs;
-				return HttpResponse.json({
-					results: runs,
-					count: 6,
-					pages: 2,
-					page: currentPage,
-					limit: 3,
-				});
-			}),
-		);
+		const FlowRunsAccordionContentStateful = () => {
+			const [page, setPage] = useState(1);
+			const runs = page === 1 ? page1Runs : page2Runs;
+			return (
+				<FlowRunsAccordionContentRouter
+					flowRuns={runs}
+					page={page}
+					totalPages={2}
+					onPageChange={setPage}
+				/>
+			);
+		};
 
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
+		render(<FlowRunsAccordionContentStateful />, { wrapper: createWrapper() });
 
 		await waitFor(() => {
 			expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
 		});
 
-		currentPage = 2;
-		const nextButton = screen.getByRole("link", { name: /next/i });
+		const nextButton = screen.getByRole("button", { name: /next/i });
 		await user.click(nextButton);
 
 		await waitFor(() => {
@@ -429,21 +405,17 @@ describe("FlowRunsAccordionContent", () => {
 			estimated_run_time: 3661,
 		});
 
-		server.use(
-			http.post(buildApiUrl("/flow_runs/paginate"), () => {
-				return HttpResponse.json({
-					results: [flowRun],
-					count: 1,
-					pages: 1,
-					page: 1,
-					limit: 3,
-				});
-			}),
+		render(
+			<FlowRunsAccordionContentRouter
+				flowRuns={[flowRun]}
+				page={1}
+				totalPages={1}
+				onPageChange={() => {}}
+			/>,
+			{
+				wrapper: createWrapper(),
+			},
 		);
-
-		render(<FlowRunsAccordionContentRouter flowId="flow-1" />, {
-			wrapper: createWrapper(),
-		});
 
 		await waitFor(() => {
 			expect(screen.getByText("Timed Run")).toBeInTheDocument();

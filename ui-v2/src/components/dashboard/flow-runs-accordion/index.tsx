@@ -1,6 +1,12 @@
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { buildFilterFlowRunsQuery, type FlowRunsFilter } from "@/api/flow-runs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	buildFilterFlowRunsQuery,
+	buildPaginateFlowRunsQuery,
+	type FlowRun,
+	type FlowRunsFilter,
+	type FlowRunsPaginateFilter,
+} from "@/api/flow-runs";
 import { buildListFlowsQuery, type Flow, type FlowsFilter } from "@/api/flows";
 import type { components } from "@/api/prefect";
 import {
@@ -22,6 +28,8 @@ export type FlowRunsAccordionProps = {
 	stateTypes: StateType[];
 };
 
+const ITEMS_PER_PAGE = 3;
+
 /**
  * Accordion component that displays flow runs grouped by flow.
  * Each accordion section shows a flow with its runs.
@@ -41,7 +49,7 @@ export function FlowRunsAccordion({
 		// Add state type filter
 		if (stateTypes.length > 0) {
 			baseFilter.flow_runs = {
-				...baseFilter.flow_runs,
+				...(baseFilter.flow_runs ?? {}),
 				operator: "and_",
 				state: {
 					operator: "and_",
@@ -113,19 +121,92 @@ export function FlowRunsAccordion({
 				if (!flow) return null;
 
 				return (
-					<AccordionItem key={flowId} value={flowId}>
-						<AccordionTrigger className="hover:no-underline">
-							<FlowRunsAccordionHeader flow={flow} filter={flowRunsFilter} />
-						</AccordionTrigger>
-						<AccordionContent>
-							<FlowRunsAccordionContent
-								flowId={flowId}
-								filter={flowRunsFilter}
-							/>
-						</AccordionContent>
-					</AccordionItem>
+					<FlowRunsAccordionItem
+						key={flowId}
+						flow={flow}
+						flowId={flowId}
+						filter={flowRunsFilter}
+					/>
 				);
 			})}
 		</Accordion>
+	);
+}
+
+type FlowRunsAccordionItemProps = {
+	flow: Flow;
+	flowId: string;
+	filter?: FlowRunsFilter;
+};
+
+function FlowRunsAccordionItem({
+	flow,
+	flowId,
+	filter,
+}: FlowRunsAccordionItemProps) {
+	const [page, setPage] = useState(1);
+	const latestFlowRunRef = useRef<FlowRun | undefined>(undefined);
+
+	useEffect(() => {
+		setPage(1);
+		latestFlowRunRef.current = undefined;
+	}, [flowId, filter]);
+
+	const paginatedFilter: FlowRunsPaginateFilter = useMemo(() => {
+		return {
+			page,
+			limit: ITEMS_PER_PAGE,
+			sort: "START_TIME_DESC",
+			flows: {
+				...(filter?.flows ?? {}),
+				operator: "and_",
+				id: { any_: [flowId] },
+			},
+			flow_runs: filter?.flow_runs ?? undefined,
+			deployments: filter?.deployments ?? undefined,
+			task_runs: filter?.task_runs ?? undefined,
+			work_pools: filter?.work_pools ?? undefined,
+			work_pool_queues: filter?.work_pool_queues ?? undefined,
+		};
+	}, [filter, flowId, page]);
+
+	const { data: flowRunsPagination } = useQuery(
+		buildPaginateFlowRunsQuery(paginatedFilter, 30_000),
+	);
+
+	const flowRuns = flowRunsPagination?.results ?? [];
+	const totalPages = flowRunsPagination?.pages ?? 1;
+	const totalCount = flowRunsPagination?.count ?? 0;
+
+	useEffect(() => {
+		setPage((currentPage) => Math.min(currentPage, totalPages));
+	}, [totalPages]);
+
+	useEffect(() => {
+		if (flowRunsPagination?.page === 1 && flowRunsPagination.results.length > 0) {
+			latestFlowRunRef.current = flowRunsPagination.results[0];
+		}
+	}, [flowRunsPagination]);
+
+	const lastFlowRun = latestFlowRunRef.current ?? flowRuns[0];
+
+	return (
+		<AccordionItem value={flowId}>
+			<AccordionTrigger className="hover:no-underline">
+				<FlowRunsAccordionHeader
+					flow={flow}
+					count={totalCount}
+					lastFlowRun={lastFlowRun}
+				/>
+			</AccordionTrigger>
+			<AccordionContent>
+				<FlowRunsAccordionContent
+					flowRuns={flowRuns}
+					page={page}
+					totalPages={totalPages}
+					onPageChange={setPage}
+				/>
+			</AccordionContent>
+		</AccordionItem>
 	);
 }
